@@ -1,164 +1,120 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // ================================================================
-// Concept Studio API Route
-// Bridge between the Next.js frontend and AutoGPT agent backend
+// Concept Generation API Route
+// Connects to AutoGPT agents for real concept generation
 // ================================================================
 
-const AUTOGPT_API_URL = process.env.AUTOGPT_API_URL || 'https://backend.agpt.co/external-api/v1'
+const AUTOGPT_API_URL = process.env.AUTOGPT_API_URL || 'https://api.agpt.co'
 const AUTOGPT_API_KEY = process.env.AUTOGPT_API_KEY || ''
-// The agent graph ID for your Concept Studio agent (set after building it)
-const AGENT_GRAPH_ID = process.env.CONCEPT_STUDIO_AGENT_ID || ''
 
-interface GenerateRequest {
-  prompt: string
-  modules: string[]
-  style: string
-  industry: string
-  audience: string
-  budget: string
-  timeline: string
-  additionalNotes: string
+// Map module IDs to AutoGPT agent IDs (configure after creating agents)
+const MODULE_AGENTS: Record<string, string> = {
+  brainstorm: process.env.AGENT_BRAINSTORM || '',
+  business_plan: process.env.AGENT_BUSINESS_PLAN || '',
+  market_research: process.env.AGENT_MARKET_RESEARCH || '',
+  business_advice: process.env.AGENT_BUSINESS_ADVICE || '',
+  app_blueprint: process.env.AGENT_APP_BLUEPRINT || '',
+  code_scripts: process.env.AGENT_CODE_SCRIPTS || '',
+  ui_ux: process.env.AGENT_UI_UX || '',
+  mockups: process.env.AGENT_MOCKUPS || '',
+  branding: process.env.AGENT_BRANDING || '',
+  ai_suggestions: process.env.AGENT_AI_SUGGESTIONS || '',
 }
 
-// Poll for execution results
-async function pollExecution(graphId: string, executionId: string, maxAttempts = 60): Promise<any> {
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, 3000))
-
-    const res = await fetch(
-      `${AUTOGPT_API_URL}/graphs/${graphId}/executions/${executionId}`,
-      { headers: { 'X-API-Key': AUTOGPT_API_KEY } }
-    )
-
-    if (!res.ok) continue
-
-    const data = await res.json()
-    if (data.status === 'COMPLETED' || data.status === 'FAILED') {
-      return data
-    }
-  }
-
-  throw new Error('Execution timed out after 3 minutes')
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const body: GenerateRequest = await req.json()
+    const body = await request.json()
+    const { prompt, modules, style, industry, audience, budget, timeline, additionalNotes } = body
 
-    // Validation
-    if (!body.prompt?.trim()) {
-      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
-    }
-    if (!body.modules?.length) {
-      return NextResponse.json({ error: 'At least one module must be selected' }, { status: 400 })
+    if (!prompt || !modules || modules.length === 0) {
+      return NextResponse.json(
+        { error: 'Prompt and at least one module are required' },
+        { status: 400 }
+      )
     }
 
-    // Check configuration
+    // If no API key configured, return demo/placeholder response
     if (!AUTOGPT_API_KEY) {
-      return NextResponse.json(
-        { error: 'AUTOGPT_API_KEY not configured. Add it to .env.local' },
-        { status: 500 }
-      )
-    }
-    if (!AGENT_GRAPH_ID) {
-      return NextResponse.json(
-        { error: 'CONCEPT_STUDIO_AGENT_ID not configured. Build the agent first, then add its ID to .env.local' },
-        { status: 500 }
-      )
-    }
-
-    // Format inputs for the AutoGPT agent
-    const agentInputs = {
-      prompt: body.prompt,
-      modules: body.modules.join(', '),
-      style: body.style,
-      industry: body.industry || 'Not specified',
-      target_audience: body.audience || 'Not specified',
-      budget: body.budget || 'Not specified',
-      timeline: body.timeline || 'Not specified',
-      additional_notes: body.additionalNotes || 'None',
+      return NextResponse.json({
+        success: true,
+        executionId: `local-${Date.now()}`,
+        modules: Object.fromEntries(
+          modules.map((mod: string) => [
+            mod,
+            {
+              status: 'completed',
+              content: `[Demo Mode] Generated ${mod} content for: ${prompt}. Configure AUTOGPT_API_KEY to enable real generation.`,
+            },
+          ])
+        ),
+        message: 'Running in demo mode. Set AUTOGPT_API_KEY environment variable for real AI generation.',
+      })
     }
 
-    // Step 1: Trigger the agent execution
-    const execRes = await fetch(
-      `${AUTOGPT_API_URL}/graphs/${AGENT_GRAPH_ID}/execute`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': AUTOGPT_API_KEY,
-        },
-        body: JSON.stringify(agentInputs),
+    // Real AutoGPT integration
+    const results: Record<string, any> = {}
+
+    for (const moduleId of modules) {
+      const agentId = MODULE_AGENTS[moduleId]
+      if (!agentId) {
+        results[moduleId] = {
+          status: 'error',
+          content: `Agent not configured for module: ${moduleId}`,
+        }
+        continue
       }
-    )
 
-    if (!execRes.ok) {
-      const errorText = await execRes.text()
-      return NextResponse.json(
-        { error: `AutoGPT execution failed: ${errorText}` },
-        { status: execRes.status }
-      )
+      try {
+        const agentResponse = await fetch(`${AUTOGPT_API_URL}/api/v1/agents/${agentId}/execute`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${AUTOGPT_API_KEY}`,
+          },
+          body: JSON.stringify({
+            input: {
+              prompt,
+              module: moduleId,
+              style: style || 'Professional',
+              industry: industry || 'General',
+              audience: audience || 'General',
+              budget: budget || 'Not specified',
+              timeline: timeline || 'Not specified',
+              additional_notes: additionalNotes || '',
+            },
+          }),
+        })
+
+        if (agentResponse.ok) {
+          const data = await agentResponse.json()
+          results[moduleId] = {
+            status: 'completed',
+            content: data.output || data.result || JSON.stringify(data),
+          }
+        } else {
+          results[moduleId] = {
+            status: 'error',
+            content: `Agent returned HTTP ${agentResponse.status}`,
+          }
+        }
+      } catch (err: any) {
+        results[moduleId] = {
+          status: 'error',
+          content: `Failed to execute agent: ${err.message}`,
+        }
+      }
     }
-
-    const execution = await execRes.json()
-    const executionId = execution.id || execution.execution_id
-
-    // Step 2: Poll for completion
-    const result = await pollExecution(AGENT_GRAPH_ID, executionId)
-
-    if (result.status === 'FAILED') {
-      return NextResponse.json(
-        { error: 'Agent execution failed', details: result },
-        { status: 500 }
-      )
-    }
-
-    // Step 3: Parse outputs into module results
-    const moduleResults = parseAgentOutputs(result, body.modules)
 
     return NextResponse.json({
       success: true,
-      executionId,
-      modules: moduleResults,
+      executionId: `exec-${Date.now()}`,
+      modules: results,
     })
   } catch (error: any) {
-    console.error('[Concept Studio] Generation error:', error)
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }
     )
   }
-}
-
-// Parse AutoGPT agent outputs into module-specific results
-function parseAgentOutputs(execution: any, requestedModules: string[]) {
-  const outputs = execution.outputs || execution.output || {}
-  const results: Record<string, any> = {}
-
-  for (const mod of requestedModules) {
-    // Try to match output keys to module names
-    const key = mod.toLowerCase().replace(/[^a-z0-9]/g, '_')
-    const match = Object.entries(outputs).find(([k, _]) =>
-      k.toLowerCase().includes(key) || key.includes(k.toLowerCase())
-    )
-
-    results[mod] = {
-      status: match ? 'completed' : 'pending',
-      content: match ? match[1] : null,
-    }
-  }
-
-  // If output is a single blob (e.g. full JSON), try to distribute
-  if (Object.values(results).every((r) => r.status === 'pending')) {
-    // Fallback: put entire output in each module
-    for (const mod of requestedModules) {
-      results[mod] = {
-        status: 'completed',
-        content: outputs,
-      }
-    }
-  }
-
-  return results
 }
