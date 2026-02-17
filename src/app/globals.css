@@ -2,49 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-::selection {
-  background: rgba(139, 92, 246, 0.3);
-}
+/* ================================================================
+   Concept Studio Design System
+   ================================================================ */
 
 @layer base {
   :root {
     --cs-bg: #0a0a14;
     --cs-card: #121220;
-    --cs-border: #1e1e32;
+    --cs-border: #1e1e3a;
     --cs-text: #e4e4ed;
-    --cs-text-muted: #66668a;
+    --cs-text-muted: #8888a4;
     --cs-accent: #8b5cf6;
-    --cs-accent-hover: #a77eff;
-    --cs-success: #34d399;
+    --cs-accent-hover: #7c3aed;
   }
-}
 
-body {
-  background: var(--cs-bg);
-  color: var(--cs-text);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--cs-border) transparent;
+  }
+
+  ::selection {
+    background: rgba(139, 92, 246, 0.3);
+    color: #fff;
+  }
 }
 
 @layer components {
+  /* Glassmorphism card */
   .glass {
-    @apply bg-[color:var(--cs-card)] border border-[color:var(--cs-border)] backdrop-blur-xl;
+    background: rgba(18, 18, 32, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
-  .glass-light {
-    @apply bg-[color:var(--cs-card)]/50 border border-[color:var(--cs-border)]/50;
-  }
-  .glow-accent {
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
-  }
-  .glow-accent-strong {
-    box-shadow: 0 0 40px rgba(139, 92, 246, 0.25);
-  }
+
+  /* Gradient text */
   .gradient-text {
-    @apply bg-gradient-to-r from-[color:var(--cs-accent)] to-purple-400 bg-clip-text text-transparent;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1, #8b5cf6);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  /* Accent glow */
+  .glow-accent {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.15),
+                0 0 40px rgba(139, 92, 246, 0.05);
+  }
+
+  /* Card hover effect */
+  .card-hover {
+    transition: all 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    border-color: rgba(139, 92, 246, 0.3);
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--cs-border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--cs-accent); }
+@layer utilities {
+  /* Fade in animation */
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+}
+
+/* Keyframes */
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
